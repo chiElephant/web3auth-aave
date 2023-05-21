@@ -166,7 +166,6 @@ export const SmartAccountProvider = ({ children }: any) => {
       // ethAdapter could be used like this
       // const bal = await wallet.ethersAdapter().getBalance(state.address);
       // console.log(bal);
-      // you may use EOA address my goerli SCW 0x1927366dA53F312a66BD7D09a88500Ccd16f175e
       const balanceParams = {
         chainId: activeChainId,
         eoaAddress: state.address,

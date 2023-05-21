@@ -1,11 +1,8 @@
-import React, { useState, useEffect, useRef, Fragment } from "react";
+import React, { useState, Fragment } from "react";
 // import { approve } from "./Components/functions";
 import { useSmartAccountContext } from "./contexts/SmartAccountContext";
 import { useWeb3AuthContext } from "./contexts/SocialLoginContext";
-import SocialLogin from "@biconomy/web3-auth";
 import "@biconomy/web3-auth/dist/src/style.css"
-import { ChainId } from "@biconomy/core-types";
-import { ethers } from "ethers";
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import {errorPopup, loadingPopup, successPopup, warningPopup} from './utils/PopUpMessage'
@@ -52,7 +49,7 @@ export default function Main() {
 			window.alert('Non-ethereum browser detected.')
 		}
             //Load user wallet info
-            {/*const netid = await web3.eth.net.getId(); //get current network connected
+            /*const netid = await web3.eth.net.getId(); //get current network connected
             setNetworkID(netid)
             console.log('Network ID: ',networkID)
 
@@ -104,7 +101,7 @@ export default function Main() {
             var WETHBalance = await WETHContract.methods.balanceOf(account).call();
             setWethWalletBalance(+(WETHBalance))
             console.log('WETH tokens balance: ',wethWalletBalance)
-    successPopup("Wallet balance updated")*/}
+    successPopup("Wallet balance updated")*/
 
     }
 
