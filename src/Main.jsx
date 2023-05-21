@@ -127,10 +127,10 @@ export default function Main() {
     function LogoutButton() {
         return (
             <>
-                {address && (
+                {selectedAccount && address && (
                     <div>
                         <h2>EOA Address</h2>
-                        <p>{address}</p>
+                        <p>{selectedAccount.eoaAddress}</p>
                     </div>
                 )}
                 {selectedAccount && address && (

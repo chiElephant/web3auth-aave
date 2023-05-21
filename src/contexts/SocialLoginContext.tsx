@@ -60,12 +60,12 @@ export const Web3AuthProvider = ({ children }: any) => {
   const [userInfo, setUserInfo] = useState<any>(null);
 
   const HEROKU_URL = 'https://web3auth-aave.herokuapp.com/'
-  const VERECEL_URL = ''
+  const VERCEL_URL = 'https://web3auth-aave.vercel.app'
 
 
   // if wallet already connected close widget
   useEffect(() => {
-    console.log("hidelwallet");
+    console.log("hide wallet");
     if (socialLoginSDK && socialLoginSDK.provider) {
       socialLoginSDK.hideWallet();
     }
@@ -99,9 +99,11 @@ export const Web3AuthProvider = ({ children }: any) => {
     setLoading(true);
     const sdk = new SocialLogin();
     const signature1 = await sdk.whitelistUrl(HEROKU_URL)
+    const signature2 = await sdk.whitelistUrl(VERCEL_URL)
     await sdk.init({
           whitelistUrls: {
-            'https://biconomy-social-auth.vercel.app': signature1,
+            HEROKU_URL: signature1,
+            VERCEL_URL: signature2,
           }
         });
     sdk.showWallet();

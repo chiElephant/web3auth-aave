@@ -91,6 +91,7 @@ export const SmartAccountProvider = ({ children }: any) => {
           {
             chainId: ChainId.ARBITRUM,
             // dappAPIKey: todo
+            //providerUrl: <YOUR_PROVIDER_URL>
           },
         ],
       });
