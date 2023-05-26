@@ -27,7 +27,7 @@ export default function Main() {
     };
 
     const heroku_URL = 'https://web3auth-aave.herokuapp.com/'
-    const vercel_URL = 'https://web3auth-aave-two.vercel.app'
+    const vercel_URL = 'https://web3auth-aave-jwd0xq7jw-chielephant.vercel.app'
     const rpcTarget = 'https://rpc.ankr.com/arbitrum'
     const network = 'cyan'
 
