@@ -28,17 +28,25 @@ export default function Main() {
 
     const heroku_URL = 'https://web3auth-aave.herokuapp.com/'
     const vercel_URL = 'https://web3auth-aave-two.vercel.app'
-    // const rpcTarget = 'https://rpc.ankr.com/arbitrum'
+    const providerUrl = 'https://rpc.ankr.com/arbitrum'
     // const network = 'cyan'
 
     const [socialLoginSDK, setSocialLoginSDK] = useState(null)
     const [web3State, setWeb3State] = useState(initialState)
-    const [smartAccount, setSmartAccount] = useState(null)
+    // const [smartAccount, setSmartAccount] = useState(null)
     const [userInfo, setUserInfo] = useState(null)
-    const [loading, setLoading] = useState(false)
     const [web3, setWeb3] = useState(null)
+    const [wallet, setWallet] = useState(null)
+    const [state, setState] = useState(null)
+    const [selectedAccount, setSelectedAccount] = useState(null)
+    const [smartAccountsArray, setSmartAccountsArray] = useState([])
+    const [balance, setBalance] = useState({
+        totalBalanceInUsd: 0,
+        alltokenBalances: [],
+    });
+    const [isFetchingBalance, setIsFetchingBalance] = useState(false)
 
-    const { address } = web3State
+    const { address, provider } = web3State
 
     const coinsData = [
         { Asset: 'DAI', APY: '1%' },
@@ -53,6 +61,131 @@ export default function Main() {
             socialLoginSDK.hideWallet()
         }
     }, [address, socialLoginSDK])
+
+    const getSmartAccountBalance = useCallback(async () => {
+        if (!provider || !address) return "Wallet not connected";
+        if (!state || !wallet) return "Init Smart Account First";
+
+        try {
+        setIsFetchingBalance(true);
+        // ethAdapter could be used like this
+        // const bal = await wallet.ethersAdapter().getBalance(state.address);
+        // console.log(bal);
+        const balanceParams = {
+            chainId: activeChainId,
+            eoaAddress: state.address,
+            tokenAddresses: [],
+        };
+        const balFromSdk = await wallet.getAlltokenBalances(balanceParams);
+        console.info("getAlltokenBalances", balFromSdk);
+
+        const usdBalFromSdk = await wallet.getTotalBalanceInUsd(balanceParams);
+        console.info("getTotalBalanceInUsd", usdBalFromSdk);
+        setBalance({
+            totalBalanceInUsd: usdBalFromSdk.data.totalBalance,
+            alltokenBalances: balFromSdk.data,
+        });
+        setIsFetchingBalance(false);
+        return "";
+        } catch (error) {
+        setIsFetchingBalance(false);
+        console.error({ getSmartAccountBalance: error });
+        return error.message;
+        }
+    }, [activeChainId, address, provider, state, wallet])
+
+    const getSmartAccount = useCallback(async () => {
+        if (!provider || !address) return 'Wallet not connected';
+
+        try {
+            const walletProvider = new ethers.providers.Web3Provider(provider);
+            console.log('walletProvider', walletProvider);
+
+            //New instance, all config params are optional
+            const wallet = new SmartAccount(walletProvider, {
+                activeNetworkId: activeChainId,
+                supportedNetworksIds: [activeChainId],
+                networkConfig: [
+                    {
+                        chainId: activeChainId,
+                        // dappAPIKey: todo
+                        providerUrl: providerUrl
+                    }
+
+                ]
+            });
+            console.log('wallet', wallet);
+
+            // Wallet initialization to fetch wallet info
+            const smartAccount = await wallet.init();
+            setWallet(wallet);
+            console.log('smartAccount:', smartAccount);
+
+            smartAccount.on('txHashGenerated', (response) => {
+                console.log(
+                    'txHashGenerated event received in AddLP via emitter', response
+                );
+            });
+
+            smartAccount.on("txHashChanged", (response: any) => {
+                console.log(
+                "txHashChanged event received in AddLP via emitter",
+                response
+                );
+            });
+
+            smartAccount.on("txMined", (response: any) => {
+                console.log("txMined event received in AddLP via emitter", response);
+            });
+
+            smartAccount.on("error", (response: any) => {
+                console.log("error event received in AddLP via emitter", response);
+            });
+
+            // Get all smart account versions available and update in state
+            const { data } = await smartAccount.getSmartAccountsByOwner({
+                chainId: activeChainId,
+                owner: address,
+            })
+
+            console.log('getSmartAccountsByOwner', data);
+            const accountData = [];
+            for (let i = 0; i < data.length; i++) {
+                accountData.push(data[i])
+            }
+            setSmartAccountsArray(accountData);
+
+            // Set the first wallet version as default
+
+            if (accountData.length) {
+                wallet.setSmartAccountVersion(accountData[0].version);
+                setSelectedAccount(accountData[0])
+                getSmartAccountBalance()
+            }
+            // get address, is Deployed and other data
+            const state = await smartAccount.getSmartAccountState();
+            setState(state)
+            console.log('getSmartAccountState', state);
+            return '';
+
+        } catch (error) {
+            console.error({ getSmartAccount: error});
+            return error.message;
+        }
+
+    }, [provider, address, activeChainId, getSmartAccountBalance])
+
+    useEffect(() => {
+        if (wallet && selectedAccount) {
+        console.log("setSmartAccountVersion", selectedAccount);
+        wallet.setSmartAccountVersion(selectedAccount.version);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedAccount])
+
+    useEffect(() => {
+        getSmartAccount();
+    }, [getSmartAccount])
 
     const loadWeb3 = async () => {
         //Initiate the web3 library
@@ -127,7 +260,6 @@ export default function Main() {
         if (address) return;
 
         if (socialLoginSDK?.provider) {
-            setLoading(true);
             console.info("socialLoginSDK.provder: ", socialLoginSDK.provider);
 
             const web3Provider = new ethers.providers.Web3Provider(socialLoginSDK.provider)
@@ -143,7 +275,6 @@ export default function Main() {
                 address: gotAccount,
                 chainId: Number(network.chainId)
             })
-            setLoading(false);
             return;
         }
 
@@ -152,10 +283,9 @@ export default function Main() {
             return socialLoginSDK;
         }
 
-        setLoading(true);
         const sdk = new SocialLogin();
-        const signiture1 = await sdk.whiteListUrl(heroku_URL)
-        const signiture2 = await sdk.whiteListUrl(vercel_URL)
+        const signiture1 = await sdk.whitelistUrl(heroku_URL)
+        const signiture2 = await sdk.whitelistUrl(vercel_URL)
 
         await sdk.init({
             // chainId: chainIds.ARBITRUM_hex,
@@ -167,9 +297,8 @@ export default function Main() {
             // rpcTarget: rpcTarget
         })
 
-        sdk.showWWallet();
+        sdk.showWallet();
         setSocialLoginSDK(sdk);
-        setLoading(false);
         return socialLoginSDK;
 
     }, [address, socialLoginSDK])
@@ -245,6 +374,8 @@ export default function Main() {
                     <div>
                         <h2>Smart Account Address</h2>
                         <p>{selectedAccount.smartAccountAddress}</p>
+                        <h2>Balance (usd)</h2>
+                        <p>{balance.totalBalanceInUsd}</p>
                     </div>
                 )}
                 <div>
@@ -291,7 +422,7 @@ export default function Main() {
                 assetAddress
             );
 
-            const output = await contract.methods.approve(CONTRACT.Pool, weiValue).send({from: smartAccount})
+            const output = await contract.methods.approve(CONTRACT.Pool, weiValue).send({from: selectedAccount})
             .on('transactionHash', function(){
                 loadingPopup("Transaction pending...")
             })
@@ -410,11 +541,11 @@ export default function Main() {
             {/*Login*/}
             <section className="section">
                 <div className="center">
-                    {!smartAccount ? LoginButton() : 'Welcome'}
+                    {!address ? LoginButton() : 'Welcome'}
                 </div>
                 <div className="mb-4 mt-4">
                     <div className="text-center">
-                        {smartAccount ? LogoutButton() : "Wallet not connected"}
+                        {address ? LogoutButton() : "Wallet not connected"}
                     </div>
                 </div>
                 <div className="mb-4 mt-4">
