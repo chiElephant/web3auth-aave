@@ -69,7 +69,7 @@ export default function Main() {
         // const bal = await wallet.ethersAdapter().getBalance(state.address);
         // console.log(bal);
         const balanceParams = {
-            chainId: chainIds.ARBITRUM_hex,
+            chainId: chainIds.ARBITRUM,
             eoaAddress: state.address,
             tokenAddresses: [],
         };
