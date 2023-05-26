@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback} from "react";
-import SocialLogin from "@biconomy/web3-auth";
+import React, { useState, useEffect, useCallback} from "react";
+import SocialLogin, { getSocialLoginSDK } from "@biconomy/web3-auth";
 import "@biconomy/web3-auth/dist/src/style.css"
 import SmartAccount from "@biconomy/smart-account"
 import { ethers } from "ethers";
@@ -11,28 +11,48 @@ import { CONTRACT } from "./utils/contracts";
 import Web3 from 'web3'
 
 export default function Main() {
-
-    const [smartAccount, setSmartAccount] = useState(null)
-    const [interval, enableInterval] = useState(false)
-    const [web3, setWeb3] = useState(null)
-    const sdkRef = useRef(null);
-    const [userInfo, setUserInfo] = useState(null)
-
-    // const chainId_ARBITRUM = "0xA4B1" //42161 // "0x66EEB"// 421611 // "0xA4B1" //42161
     const chainIds = {
         ARBITRUM_hex: '0xA4B1',
         ARBITRUM: 42161,
     }
+
+    const activeChainId = chainIds.ARBITRUM
+
+    const initialState = {
+        provider: null,
+        web3Provider: null,
+        ethersProvider: null,
+        address: "",
+        chainId: activeChainId,
+    };
+
     const heroku_URL = 'https://web3auth-aave.herokuapp.com/'
     const vercel_URL = 'https://web3auth-aave-two.vercel.app'
-    const rpcTarget = 'https://rpc.ankr.com/arbitrum'
-    const network = 'cyan'
+    // const rpcTarget = 'https://rpc.ankr.com/arbitrum'
+    // const network = 'cyan'
+
+    const [socialLoginSDK, setSocialLoginSDK] = useState(null)
+    const [web3State, setWeb3State] = useState(initialState)
+    const [smartAccount, setSmartAccount] = useState(null)
+    const [userInfo, setUserInfo] = useState(null)
+    const [loading, setLoading] = useState(false)
+    const [web3, setWeb3] = useState(null)
+
+    const { address } = web3State
 
     const coinsData = [
         { Asset: 'DAI', APY: '1%' },
         { Asset: 'USDC', APY: '1%' },
         { Asset: 'ETH', APY: '1%' }
     ];
+
+    // if wallet is already connected, close widget
+    useEffect(() => {
+        console.log('hide waller');
+        if (socialLoginSDK && socialLoginSDK.provider) {
+            socialLoginSDK.hideWallet()
+        }
+    }, [address, socialLoginSDK])
 
     const loadWeb3 = async () => {
         //Initiate the web3 library
@@ -103,95 +123,98 @@ export default function Main() {
         successPopup("Wallet balance updated")*/
     }
 
-    const initSmartAccount = useCallback(async () => {
-         if (!sdkRef?.current.provider) return;
+    const connect = useCallback(async () => {
+        if (address) return;
 
-        sdkRef.current.hideWallet();
-        const web3Provider = new ethers.providers.Web3Provider(sdkRef.current.provider);
+        if (socialLoginSDK?.provider) {
+            setLoading(true);
+            console.info("socialLoginSDK.provder: ", socialLoginSDK.provider);
 
-        try {
-            const account = new SmartAccount(web3Provider, {
-                activeNetworkId: chainIds.ARBITRUM,
-                supportedNetworkIds: [chainIds.ARBITRUM]
-            });
-            await account.init();
-            setSmartAccount(account);
-            // loadWeb3();
-        } catch (err) {
-            console.log('error setting up smart account..', err);
-        }
-    }, [chainIds.ARBITRUM])
+            const web3Provider = new ethers.providers.Web3Provider(socialLoginSDK.provider)
 
-    async function initSocialLogin() {
-        if (!sdkRef.current) {
+            const signer = web3Provider.getSigner();
+            const gotAccount = await signer.getAddress();
+            const network = await web3Provider.getNetwork();
 
-        try {
-            const socialLoginSDK = new SocialLogin()
-            const signature1 = await socialLoginSDK.whitelistUrl(heroku_URL)
-            const signature2 = await socialLoginSDK.whitelistUrl(vercel_URL)
-            await socialLoginSDK.init({
-            chainId: chainIds.ARBITRUM_hex,
-            whitelistUrls: {
-                [heroku_URL]: signature1,
-                [vercel_URL]: signature2,
-            },
-            network: network,
-            rpcTarget: rpcTarget,
+            setWeb3State({
+                provider: socialLoginSDK.provider,
+                web3Provider: web3Provider,
+                ethersProvider: web3Provider,
+                address: gotAccount,
+                chainId: Number(network.chainId)
             })
-            sdkRef.current = socialLoginSDK
-        } catch (error) {
-            console.log(error, "-----------Error with the the initSocialLogin function------------");
-        }
+            setLoading(false);
+            return;
         }
 
-        if (!sdkRef.current.provider) {
-            sdkRef.current.showWallet()
-            enableInterval(true)
-        } else {
-            try {
-                initSmartAccount()
-            } catch (error) {
-                console.log(error, "-----------Error initiating smart account------------");
-            }
+        if (socialLoginSDK) {
+            socialLoginSDK.showWallet();
+            return socialLoginSDK;
         }
-    }
+
+        setLoading(true);
+        const sdk = new SocialLogin();
+        const signiture1 = await sdk.whiteListUrl(heroku_URL)
+        const signiture2 = await sdk.whiteListUrl(vercel_URL)
+
+        await sdk.init({
+            // chainId: chainIds.ARBITRUM_hex,
+            whitelistUrls: {
+                [heroku_URL]: signiture1,
+                [vercel_URL]: signiture2,
+            },
+            // network: network,
+            // rpcTarget: rpcTarget
+        })
+
+        sdk.showWWallet();
+        setSocialLoginSDK(sdk);
+        setLoading(false);
+        return socialLoginSDK;
+
+    }, [address, socialLoginSDK])
 
     const getUserInfo = useCallback(async () => {
-        if (sdkRef.current) {
-        const userInfo = await sdkRef.current.getUserInfo();
-        setUserInfo(userInfo);
+        if (socialLoginSDK) {
+            const userInfo = await socialLoginSDK.getUserInfo();
+            console.log("userInfo: ", userInfo);
+            setUserInfo(userInfo);
         }
-    }, [sdkRef]);
+    }, [socialLoginSDK])
 
-    const logout = async () => {
-        if (!sdkRef.current) {
-            console.error('Web3Modal not initialized')
+    // after metamask login -> get provider event
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            if (address) {
+                clearInterval(interval);
+            }
+            if (socialLoginSDK?.provider && !address) {
+                connect();
+            }
+        }, 1000);
+        return () => {
+            clearInterval(interval);
+        };
+    }, [address, connect, socialLoginSDK])
+
+    const disconnect = useCallback(async () => {
+        if (!socialLoginSDK || !socialLoginSDK.web3auth) {
+            console.error("Web3Modal not initialized.");
             return
         }
-        await sdkRef.current.logout()
-        sdkRef.current.hideWallet()
-        console.log('Logged Out')
-        setSmartAccount(null)
-        setUserInfo(null)
-        enableInterval(false)
-    }
-
-    useEffect(() => {
-        let loginConfig;
-
-        if (interval) {
-            loginConfig = setInterval(() => {
-                if (!!sdkRef.current?.provider) {
-                    try {
-                        initSmartAccount();
-                        clearInterval(loginConfig)
-                    } catch (error) {
-                        console.log(error, "-----------Error initializing smart account------------");
-                    }
-                }
-            }, 1000)
-        }
-    }, [interval, initSmartAccount])
+        await socialLoginSDK.logout();
+        setWeb3State({
+            provider: null,
+            web3Provider: null,
+            etherProvider: null,
+            address: '',
+            chainId: activeChainId,
+        })
+        setUserInfo(null);
+        window.getSocialLoginSDK = null;
+        socialLoginSDK.hideWallet();
+        setSocialLoginSDK(null);
+    }, [socialLoginSDK, activeChainId]);
 
     /*''''''''''''''''''''''''''*/
     /* LOGIN, LOGOUT, and USER INFO BUTTONS */
@@ -202,7 +225,7 @@ export default function Main() {
                     <p className="text-center"><i>
                         Login with your wallet provider or create a new wallet using your Gmail.
                     </i></p>
-                <button type="button" id="btn-login" className="btn btn-orange shadow-sm" onClick={initSocialLogin}>
+                <button type="button" id="btn-login" className="btn btn-orange shadow-sm" onClick={connect}>
                     Connect web3auth
                 </button>
             </div>
@@ -212,25 +235,26 @@ export default function Main() {
     function LogoutButton() {
         return (
             <>
-                {smartAccount && (
-                    <>
-                        <div>
-                            <h2>EOA Address</h2>
-                            <p>{smartAccount.owner}</p>
-                        </div>
-                        <div>
-                            <h2>Smart Account Address</h2>
-                            <p>{smartAccount.address}</p>
-                        </div>
-                    </>
+                {selectedAccount && address && (
+                    <div>
+                        <h2>EOA Address</h2>
+                        <p>{selectedAccount.eoaAddress}</p>
+                    </div>
                 )}
-            <div>
-            <button type="button" id="btn-login" className="btn btn-grey shadow-sm" onClick={() => {
-                  logout();
-                }}>
-                    Logout
-            </button>
-            </div>
+                {selectedAccount && address && (
+                    <div>
+                        <h2>Smart Account Address</h2>
+                        <p>{selectedAccount.smartAccountAddress}</p>
+                    </div>
+                )}
+                <div>
+                    <button type="button" id="btn-login" className="btn btn-grey shadow-sm" onClick={() => {
+                        setSelectedAccount(null);
+                        disconnect();
+                        }}>
+                            Logout
+                    </button>
+                </div>
             </>
         )
     }
@@ -395,12 +419,11 @@ export default function Main() {
                 </div>
                 <div className="mb-4 mt-4">
                     <div className="text-center">
-                        {!smartAccount ? 'Connect to see info' : null}
-                        {!userInfo && smartAccount ?  UserDataButton() : null}
+                        {!userInfo && address ? UserDataButton() : "Connect to see info"}
                     </div>
                 </div>
                 {userInfo && (
-                    <div style={{ wordBreak: "break-all" }}>
+                    <div style={{ maxWidth: 800, wordBreak: "break-all" }}>
                         <h2>User Info</h2>
                         <pre style={{ whiteSpace: "pre-wrap" }}>
                             {JSON.stringify(userInfo, null, 2)}
