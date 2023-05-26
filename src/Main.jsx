@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback} from "react";
-import SocialLogin, { getSocialLoginSDK } from "@biconomy/web3-auth";
+import SocialLogin from "./utils/SocialLogin";
 import "@biconomy/web3-auth/dist/src/style.css"
 import SmartAccount from "@biconomy/smart-account"
 import { ethers } from "ethers";
@@ -28,12 +28,11 @@ export default function Main() {
 
     const heroku_URL = 'https://web3auth-aave.herokuapp.com/'
     const vercel_URL = 'https://web3auth-aave-two.vercel.app'
-    const providerUrl = 'https://rpc.ankr.com/arbitrum'
-    // const network = 'cyan'
+    const rpcTarget = 'https://rpc.ankr.com/arbitrum'
+    const network = 'cyan'
 
     const [socialLoginSDK, setSocialLoginSDK] = useState(null)
     const [web3State, setWeb3State] = useState(initialState)
-    // const [smartAccount, setSmartAccount] = useState(null)
     const [userInfo, setUserInfo] = useState(null)
     const [web3, setWeb3] = useState(null)
     const [wallet, setWallet] = useState(null)
@@ -44,7 +43,6 @@ export default function Main() {
         totalBalanceInUsd: 0,
         alltokenBalances: [],
     });
-    const [isFetchingBalance, setIsFetchingBalance] = useState(false)
 
     const { address, provider } = web3State
 
@@ -67,12 +65,11 @@ export default function Main() {
         if (!state || !wallet) return "Init Smart Account First";
 
         try {
-        setIsFetchingBalance(true);
         // ethAdapter could be used like this
         // const bal = await wallet.ethersAdapter().getBalance(state.address);
         // console.log(bal);
         const balanceParams = {
-            chainId: activeChainId,
+            chainId: chainIds.ARBITRUM_hex,
             eoaAddress: state.address,
             tokenAddresses: [],
         };
@@ -85,14 +82,12 @@ export default function Main() {
             totalBalanceInUsd: usdBalFromSdk.data.totalBalance,
             alltokenBalances: balFromSdk.data,
         });
-        setIsFetchingBalance(false);
         return "";
         } catch (error) {
-        setIsFetchingBalance(false);
         console.error({ getSmartAccountBalance: error });
         return error.message;
         }
-    }, [activeChainId, address, provider, state, wallet])
+    }, [address, provider, state, wallet, chainIds.ARBITRUM_hex])
 
     const getSmartAccount = useCallback(async () => {
         if (!provider || !address) return 'Wallet not connected';
@@ -109,7 +104,7 @@ export default function Main() {
                     {
                         chainId: activeChainId,
                         // dappAPIKey: todo
-                        providerUrl: providerUrl
+                        // providerUrl: providerUrl
                     }
 
                 ]
@@ -288,20 +283,20 @@ export default function Main() {
         const signiture2 = await sdk.whitelistUrl(vercel_URL)
 
         await sdk.init({
-            // chainId: chainIds.ARBITRUM_hex,
+            chainId: chainIds.ARBITRUM_hex,
             whitelistUrls: {
                 [heroku_URL]: signiture1,
                 [vercel_URL]: signiture2,
             },
-            // network: network,
-            // rpcTarget: rpcTarget
+            network: network,
+            rpcTarget: rpcTarget
         })
 
         sdk.showWallet();
         setSocialLoginSDK(sdk);
         return socialLoginSDK;
 
-    }, [address, socialLoginSDK])
+    }, [address, socialLoginSDK, chainIds.ARBITRUM_hex])
 
     const getUserInfo = useCallback(async () => {
         if (socialLoginSDK) {
